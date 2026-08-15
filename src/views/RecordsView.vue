@@ -29,6 +29,10 @@ function again(record) {
   router.push({ path: '/check', query: { route_id: record.route_id } })
 }
 
+function editRecord(record) {
+  router.push({ path: '/check', query: { edit_record: record.id } })
+}
+
 function rateClass(record) {
   if (record.complete) return 'ok'
   if (record.required_missing) return 'warn'
@@ -64,6 +68,7 @@ function rateText(record) {
         <div class="record-right">
           <span class="rate" :class="rateClass(r)">{{ rateText(r) }} · {{ r.checked }}/{{ r.total }}</span>
           <div class="record-actions">
+            <button class="btn btn-ghost btn-sm" @click="editRecord(r)">继续编辑</button>
             <button class="btn btn-ghost btn-sm" @click="again(r)">再次检查</button>
             <button class="btn btn-danger btn-sm" @click="onDelete(r)">删除</button>
           </div>

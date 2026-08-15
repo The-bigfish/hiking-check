@@ -1,6 +1,6 @@
-import { defineStore } from 'pinia'
+﻿import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { getAll, put, remove, uid } from '../db/db'
+import { getAll, put, remove, uid } from '../db/db.js'
 
 export const useGearStore = defineStore('gear', () => {
   const items = ref([])

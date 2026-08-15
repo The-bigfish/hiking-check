@@ -6,6 +6,7 @@ import { useRouteStore } from '../stores/route'
 import { useRecordStore } from '../stores/record'
 import { categoryLabel, formatDate, ROUTE_TYPES, routeTypeLabel } from '../utils/constants'
 import { uid } from '../db/db'
+import { applyRecordStateToChecks, buildItemsSnapshot } from '../utils/checkHelpers'
 
 const route = useRoute()
 const gearStore = useGearStore()
@@ -17,6 +18,7 @@ const selectedRouteId = ref(null)
 const checks = ref([])
 const startDate = ref(formatDate(new Date()))
 const savedMsg = ref('')
+const editingRecordId = ref(null)
 
 const filteredRoutes = computed(() => {
   if (typeFilter.value === 'all') return routeStore.routes
@@ -26,11 +28,29 @@ const filteredRoutes = computed(() => {
 const selectedRoute = computed(() => routeStore.routes.find((r) => r.id === selectedRouteId.value) || null)
 
 watch(
-  [() => route.query.route_id, () => routeStore.loaded],
-  ([id, loaded]) => {
-    if (loaded && id && id !== selectedRouteId.value) {
-      const target = routeStore.routes.find((r) => r.id === id)
+  [() => route.query, () => routeStore.loaded, () => recordStore.loaded],
+  () => {
+    if (!routeStore.loaded || !recordStore.loaded) return
+    const recId = route.query.edit_record
+    const rid = route.query.route_id
+    if (recId) {
+      const rec = recordStore.records.find((r) => r.id === recId)
+      if (!rec) return
+      editingRecordId.value = rec.id
+      selectedRouteId.value = rec.route_id
+      startDate.value = rec.date || formatDate(new Date())
+      savedMsg.value = ''
+      buildChecks(rec.route_id)
+      applyRecordStateToChecks(checks.value, rec.items)
+    } else if (rid && rid !== selectedRouteId.value) {
+      editingRecordId.value = null
+      const target = routeStore.routes.find((r) => r.id === rid)
       if (target) startCheck(target.id)
+    } else {
+      editingRecordId.value = null
+      selectedRouteId.value = null
+      checks.value = []
+      savedMsg.value = ''
     }
   },
   { immediate: true },
@@ -54,6 +74,7 @@ function buildChecks(routeId) {
 }
 
 function startCheck(routeId) {
+  editingRecordId.value = null
   selectedRouteId.value = routeId
   savedMsg.value = ''
   buildChecks(routeId)
@@ -61,11 +82,6 @@ function startCheck(routeId) {
 
 function restart() {
   buildChecks(selectedRouteId.value)
-  savedMsg.value = ''
-}
-
-function toggle(item) {
-  item.checked = !item.checked
   savedMsg.value = ''
 }
 
@@ -77,19 +93,15 @@ const allDone = computed(() => total.value > 0 && missingRequired.value.length =
 const isComplete = computed(() => total.value > 0 && checkedCount.value === total.value)
 
 function goBack() {
+  editingRecordId.value = null
   selectedRouteId.value = null
   checks.value = []
+  savedMsg.value = ''
 }
 
 async function saveRecord() {
-  const itemsSnapshot = checks.value.map((c) => ({
-    name: c.name,
-    category: c.category,
-    required: c.required,
-    quantity: c.quantity,
-    checked: c.checked,
-  }))
-  await recordStore.saveRecord({
+  const itemsSnapshot = buildItemsSnapshot(checks.value)
+  const payload = {
     date: startDate.value,
     route_id: selectedRoute.value.id,
     route_name: selectedRoute.value.name,
@@ -99,8 +111,14 @@ async function saveRecord() {
     required_missing: missingRequired.value.length,
     complete: isComplete.value,
     items: itemsSnapshot,
-  })
-  savedMsg.value = '已保存到历史记录'
+  }
+  if (editingRecordId.value) {
+    await recordStore.updateRecord(editingRecordId.value, payload)
+    savedMsg.value = '已更新记录'
+  } else {
+    await recordStore.saveRecord(payload)
+    savedMsg.value = '已保存到历史记录'
+  }
 }
 </script>
 
@@ -144,7 +162,10 @@ async function saveRecord() {
         <div class="check-head-info">
           <button class="back" @click="goBack">← 返回</button>
           <div>
-            <div class="check-route-name">{{ selectedRoute.name }}</div>
+            <div class="check-route-name">
+              {{ selectedRoute.name }}
+              <span v-if="editingRecordId" class="editing-badge">继续编辑 {{ startDate }} 的记录</span>
+            </div>
             <div class="check-route-meta">
               {{ routeTypeLabel(selectedRoute.type) }} · {{ total }} 项装备
               <span v-if="missingRequired.length" class="missing-warn">缺 {{ missingRequired.length }} 项必带装备</span>
@@ -168,7 +189,7 @@ async function saveRecord() {
       <div class="check-list">
         <div v-for="c in checks" :key="c.id" class="card check-item" :class="{ done: c.checked }">
           <label class="check-main">
-            <input type="checkbox" v-model="c.checked" />
+            <input type="checkbox" v-model="c.checked" @change="savedMsg = ''" />
             <span class="check-content">
               <span class="check-name">
                 {{ c.name }}
@@ -274,6 +295,17 @@ async function saveRecord() {
 .check-route-name {
   font-size: 17px;
   font-weight: 600;
+}
+.editing-badge {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--primary);
+  background: var(--primary-soft);
+  border-radius: 99px;
+  padding: 1px 8px;
+  vertical-align: middle;
 }
 .check-route-meta {
   font-size: 13px;

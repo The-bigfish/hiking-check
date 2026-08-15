@@ -73,13 +73,18 @@ export function getByIndex(storeName, indexName, value) {
   return read(storeName, (store) => store.index(indexName).getAll(value))
 }
 
+function toPlain(value) {
+  if (value === null || value === undefined) return value
+  return JSON.parse(JSON.stringify(value))
+}
+
 export function put(storeName, value) {
-  return write(storeName, (store) => store.put(value))
+  return write(storeName, (store) => store.put(toPlain(value)))
 }
 
 export function bulkPut(storeName, values) {
   return write(storeName, (store) => {
-    values.forEach((v) => store.put(v))
+    values.forEach((v) => store.put(toPlain(v)))
   })
 }
 

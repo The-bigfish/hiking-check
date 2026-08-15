@@ -1,6 +1,6 @@
-import { defineStore } from 'pinia'
+﻿import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { getAll, getByIndex, put, bulkPut, remove, removeByIndex, uid } from '../db/db'
+import { getAll, getByIndex, put, bulkPut, remove, removeByIndex, uid } from '../db/db.js'
 
 export const useRouteStore = defineStore('route', () => {
   const routes = ref([])

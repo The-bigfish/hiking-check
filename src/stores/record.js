@@ -1,6 +1,6 @@
-import { defineStore } from 'pinia'
+﻿import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { getAll, put, remove, uid } from '../db/db'
+import { getAll, put, remove, uid } from '../db/db.js'
 
 export const useRecordStore = defineStore('record', () => {
   const records = ref([])
@@ -24,5 +24,18 @@ export const useRecordStore = defineStore('record', () => {
     records.value = records.value.filter((r) => r.id !== id)
   }
 
-  return { records, loaded, load, saveRecord, removeRecord }
+  async function updateRecord(id, data) {
+    const idx = records.value.findIndex((r) => r.id === id)
+    const old = records.value[idx] || {}
+    const record = { ...old, ...data, id, createdAt: old.createdAt ?? Date.now() }
+    await put('check_records', record)
+    if (idx > -1) {
+      records.value[idx] = record
+    } else {
+      records.value.unshift(record)
+    }
+    return record
+  }
+
+  return { records, loaded, load, saveRecord, updateRecord, removeRecord }
 })
