@@ -109,7 +109,7 @@ export function Expenses({
         </section>
         <section className="panel">
           <h2>分类占比</h2>
-          {cats.map((c) => {
+          {[...new Set(expenses.map((e) => e.category))].map((c) => {
             const sum = expenses
               .filter((e) => e.category === c)
               .reduce((a, e) => a + e.amount, 0);
@@ -138,7 +138,12 @@ export function Expenses({
           title={edit ? "编辑支出" : "记录实际支出"}
           fields={[
             num("amount", "实际金额（元）", 0, 0.01),
-            select("category", "分类", cats),
+            {
+              key: "category",
+              label: "分类",
+              categorySystem: "expense",
+              required: true,
+            },
             {
               key: "date",
               label: "支出日期",
@@ -183,6 +188,7 @@ export function Expenses({
                   tripId: trip.id,
                   amount: Math.round(v.amount * 100),
                   category: v.category,
+                  categoryId: v.categoryId,
                   date: v.date,
                   notes: v.notes,
                   attachmentId,
@@ -275,6 +281,7 @@ export function ReviewPanel({
                         id: uid(),
                         name: i.name,
                         category: i.category,
+                        categoryId: i.categoryId,
                         brand: "",
                         model: "",
                         price: i.price,

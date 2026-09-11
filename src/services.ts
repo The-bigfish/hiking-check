@@ -115,6 +115,7 @@ export function snapshot(g: Gear, tripId: string): Item {
     gearId: g.id,
     name: g.name,
     category: g.category,
+    categoryId: g.categoryId,
     quantity: 1,
     weight: g.weight,
     price: g.price,

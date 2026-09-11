@@ -1,4 +1,6 @@
 import { db } from "./db";
+import Dexie from "dexie";
+import { migrateData } from "./migration";
 import { uid, today, type Gear, type Trip, type Food } from "./model";
 import { snapshot } from "./services";
 export async function seedDemo() {
@@ -242,5 +244,6 @@ export async function seedDemo() {
           return i;
         }),
       });
+    await migrateData(Dexie.currentTransaction!);
   });
 }

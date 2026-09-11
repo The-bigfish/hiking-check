@@ -2,6 +2,7 @@ import { beforeEach, describe, it, expect, vi } from "vitest";
 import { db } from "../src/db";
 import { HikingDB } from "../src/db";
 import Dexie from "dexie";
+import { categoryKey, migrateData } from "../src/migration";
 import { seedDemo } from "../src/demo";
 import {
   weights,
@@ -28,6 +29,7 @@ const gear = (): Gear => ({
   id: uid(),
   name: "背包",
   category: "背负",
+  categoryId: categoryKey("gear", "背负"),
   brand: "",
   model: "",
   weight: 1000,
@@ -71,6 +73,7 @@ const wish = (): Wish => ({
 beforeEach(async () => {
   await db.transaction("rw", db.tables, async () => {
     for (const t of db.tables) await t.clear();
+    await migrateData(Dexie.currentTransaction!);
   });
 });
 describe("负重与餐食同源计算", () => {
@@ -156,7 +159,7 @@ describe("事务与历史", () => {
       ...old,
       maintenance: "",
     });
-    expect(upgraded.verno).toBe(2);
+    expect(upgraded.verno).toBe(3);
     await upgraded.delete();
   });
   it("连续购买及重试只生成一件装备", async () => {

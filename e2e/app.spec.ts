@@ -36,7 +36,9 @@ test("购买入库防重、装备刷新持久化、备份照片恢复", async ({
   await nav(page, "待购");
   await page.getByRole("button", { name: "添加待购", exact: true }).click();
   await page.getByLabel("名称 *", { exact: true }).fill("测试登山杖");
-  await page.getByLabel("分类 *", { exact: true }).fill("其他");
+  await page
+    .getByLabel("分类", { exact: true })
+    .selectOption({ label: "其他" });
   await page.getByLabel("预计价格（元）").fill("399.99");
   await page.getByRole("button", { name: "保存", exact: true }).click();
   await page.getByRole("button", { name: "标记已购买" }).click();
@@ -146,7 +148,7 @@ test("完成缓存后关闭页面断网重开，核心实体可增改删", async
   await p.getByRole("button", { name: "检查清单" }).click();
   await p.getByRole("button", { name: "临时物品", exact: true }).click();
   await p.getByLabel("物品名称").fill("离线气罐");
-  await p.getByLabel("分类 *", { exact: true }).fill("炊具");
+  await p.getByLabel("分类", { exact: true }).selectOption({ label: "炊具" });
   await p.getByRole("button", { name: "保存", exact: true }).click();
   await expect(p.getByRole("heading", { name: "离线气罐" })).toBeVisible();
   await p.getByRole("button", { name: "餐食", exact: true }).click();
@@ -159,13 +161,11 @@ test("完成缓存后关闭页面断网重开，核心实体可增改删", async
     .getByRole("button", { name: "＋ 添加食物", exact: true })
     .first()
     .click();
-  await p
-    .getByLabel("食物", { exact: true })
-    .selectOption({
-      value: (await read(p, "foods"))
-        .filter((f) => f.name === "离线坚果")
-        .map((f) => `${f.name} · ${f.id}`)[0],
-    });
+  await p.getByLabel("食物", { exact: true }).selectOption({
+    value: (await read(p, "foods"))
+      .filter((f) => f.name === "离线坚果")
+      .map((f) => `${f.name} · ${f.id}`)[0],
+  });
   await p.getByRole("button", { name: "保存", exact: true }).click();
   await expect
     .poll(async () =>
@@ -181,7 +181,7 @@ test("完成缓存后关闭页面断网重开，核心实体可增改删", async
   await nav(p, "待购");
   await p.getByRole("button", { name: "添加待购", exact: true }).click();
   await p.getByLabel("名称 *", { exact: true }).fill("离线袜子");
-  await p.getByLabel("分类 *", { exact: true }).fill("鞋袜");
+  await p.getByLabel("分类", { exact: true }).selectOption({ label: "鞋袜" });
   await p.getByRole("button", { name: "保存", exact: true }).click();
   await expect(p.getByRole("heading", { name: "离线袜子" })).toBeVisible();
   await p.reload();

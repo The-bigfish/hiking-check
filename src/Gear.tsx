@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { Backpack, Copy, Pencil, Archive, Search } from "lucide-react";
+import { GearImage } from "./GearImage";
 import { db } from "./db";
 import {
   categories,
@@ -26,7 +27,13 @@ import {
 } from "./ui";
 export const gearFields: Field[] = [
   txt("name", "装备名称", true),
-  { key: "category", label: "分类（可自定义）", required: true, value: "其他" },
+  {
+    key: "category",
+    label: "分类",
+    required: true,
+    value: "其他",
+    categorySystem: "gear",
+  },
   txt("brand", "品牌"),
   txt("model", "型号"),
   num("weight", "单件重量（克）"),
@@ -46,7 +53,10 @@ export function GearPage({
   run: (fn: () => Promise<unknown>) => Promise<void>;
 }) {
   const gears = useLiveQuery(() => db.gear.toArray()) || [],
-    attachments = useLiveQuery(() => db.attachments.toArray()) || [];
+    catalog =
+      useLiveQuery(() =>
+        db.categories.where("system").equals("gear").sortBy("order"),
+      ) || [];
   const [query, setQuery] = useState(""),
     [category, setCategory] = useState("全部"),
     [status, setStatus] = useState("全部"),
@@ -115,7 +125,10 @@ export function GearPage({
           >
             {[
               "全部",
-              ...new Set([...categories, ...gears.map((g) => g.category)]),
+              ...new Set([
+                ...catalog.map((c) => c.name),
+                ...gears.map((g) => g.category),
+              ]),
             ].map((c) => (
               <option key={c}>{c}</option>
             ))}
@@ -205,14 +218,7 @@ export function GearPage({
           {list.map((g) => (
             <article className="gear-card" key={g.id}>
               <div className="gear-visual">
-                {g.attachmentId ? (
-                  <img
-                    alt={g.name}
-                    src={attachments.find((a) => a.id === g.attachmentId)?.data}
-                  />
-                ) : (
-                  <Backpack size={52} strokeWidth={1} />
-                )}
+                <GearImage {...g} large />
                 <label className="select-gear">
                   <input
                     aria-label={`选择${g.name}`}

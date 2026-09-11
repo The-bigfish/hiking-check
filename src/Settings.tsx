@@ -1,8 +1,13 @@
 import { useState } from "react";
+import Dexie from "dexie";
 import { useLiveQuery } from "dexie-react-hooks";
+import { VersionData } from "./VersionData";
+import { CategoryManager } from "./Categories";
+import { TemplateEditor } from "./Templates";
+import { uid, type Template } from "./model";
 import { db } from "./db";
 import {
-  exportBackup,
+  exportAndRecord,
   restoreBackup,
   validateBackup,
   download,
@@ -20,7 +25,8 @@ export function Settings({
 }) {
   const [persistent, setPersistent] = useState("尚未检查"),
     [restoring, setRestoring] = useState(false),
-    [edit, setEdit] = useState<{ id: string; name: string }>();
+    [edit, setEdit] = useState<Template>(),
+    [categoriesOpen, setCategoriesOpen] = useState(false);
   const templates = useLiveQuery(() => db.templates.toArray()) || [];
   return (
     <>
@@ -29,6 +35,13 @@ export function Settings({
         title="我的与数据"
         description="数据属于你，保存在当前设备。记得为山野记忆留一份备份。"
       />
+      <VersionData offline={offline} />
+      <button className="secondary" onClick={() => setCategoriesOpen(true)}>
+        管理分类
+      </button>
+      {categoriesOpen && (
+        <CategoryManager onClose={() => setCategoriesOpen(false)} />
+      )}
       <div className="two-col">
         <section className="panel">
           <h2>出发前 · 离线检查</h2>
@@ -42,23 +55,6 @@ export function Settings({
           </div>
           <p className="muted">{offline.detail}</p>
           <button onClick={() => offline.check()}>检查离线使用条件</button>
-          {offline.update && (
-            <div className="notice">
-              <p>发现新版本。请保存并关闭编辑表单后更新。</p>
-              <button
-                onClick={() => {
-                  if (
-                    confirm(
-                      "现在刷新并应用新版本？未保存的表单会丢失，已保存数据不会被清除。",
-                    )
-                  )
-                    void offline.applyUpdate();
-                }}
-              >
-                现在更新
-              </button>
-            </div>
-          )}
           <hr />
           <h3>安装到手机主屏幕</h3>
           <p>
@@ -87,8 +83,10 @@ export function Settings({
               run(async () => {
                 if (!navigator.storage?.persist)
                   throw Error("浏览器不支持申请持久存储，请定期导出备份");
-                const ok = await navigator.storage.persist();
-                const estimate = await navigator.storage.estimate();
+                const ok = await Dexie.waitFor(navigator.storage.persist());
+                const estimate = await Dexie.waitFor(
+                  navigator.storage.estimate(),
+                );
                 setPersistent(
                   `${ok ? "已获准" : "未获准，请定期备份"} · 已用 ${((estimate.usage || 0) / 1024 / 1024).toFixed(1)} MB`,
                 );
@@ -99,16 +97,7 @@ export function Settings({
           </button>
           <hr />
           <div className="toolbar">
-            <button
-              onClick={() =>
-                run(async () =>
-                  download(
-                    `山行清单备份-${new Date().toISOString().slice(0, 10)}.json`,
-                    JSON.stringify(await exportBackup()),
-                  ),
-                )
-              }
-            >
+            <button onClick={() => run(() => exportAndRecord())}>
               导出完整备份
             </button>
             <label className="file-button secondary">
@@ -124,7 +113,7 @@ export function Settings({
                   await run(async () => {
                     if (f.size > 200 * 1024 * 1024)
                       throw Error("备份超过 200 MB，当前恢复器不支持");
-                    const input = JSON.parse(await f.text());
+                    const input = JSON.parse(await Dexie.waitFor(f.text()));
                     const data = validateBackup(input);
                     if (
                       !confirm(
@@ -151,6 +140,13 @@ export function Settings({
       <section className="panel">
         <div className="section-head">
           <h2>装备模板</h2>
+          <button
+            onClick={() =>
+              setEdit({ id: uid(), name: "新模板", notes: "", items: [] })
+            }
+          >
+            新建模板
+          </button>
           <span className="muted">在行程打包页保存常用组合</span>
         </div>
         {templates.map((t) => (
@@ -160,7 +156,7 @@ export function Settings({
               <p className="muted">{t.items.length} 个条目</p>
             </div>
             <button className="text-btn" onClick={() => setEdit(t)}>
-              重命名
+              详情与编辑
             </button>
             <button
               className="text-btn danger"
@@ -189,15 +185,7 @@ export function Settings({
         </button>
       </section>
       {edit && (
-        <Editor
-          title="重命名模板"
-          fields={[txt("name", "模板名称", true)]}
-          initial={edit}
-          onClose={() => setEdit(undefined)}
-          onSave={async (v) => {
-            await db.templates.update(edit.id, { name: v.name });
-          }}
-        />
+        <TemplateEditor template={edit} onClose={() => setEdit(undefined)} />
       )}
     </>
   );

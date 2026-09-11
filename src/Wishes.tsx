@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { ShoppingBag, ExternalLink } from "lucide-react";
+import { GearImage } from "./GearImage";
 import { db } from "./db";
 import { uid, money, today, type Wish } from "./model";
 import { purchase, undoPurchase } from "./services";
@@ -63,7 +64,7 @@ export function Wishes({
           .map((w) => (
             <article className="list-row" key={w.id}>
               <div className="round-icon">
-                <ShoppingBag />
+                <GearImage {...w} />
               </div>
               <div className="grow">
                 <h3>
@@ -149,7 +150,12 @@ export function Wishes({
           title={edit ? "编辑待购" : "添加待购"}
           fields={[
             txt("name", "名称", true),
-            txt("category", "分类", true),
+            {
+              key: "category",
+              label: "分类",
+              categorySystem: "gear",
+              required: true,
+            },
             txt("brand", "品牌"),
             txt("model", "型号"),
             num("price", "预计价格（元）", 0, 0.01),

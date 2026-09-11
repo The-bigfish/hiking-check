@@ -14,6 +14,7 @@ export const categories = [
   "其他",
 ];
 export interface Gear {
+  categoryId?: string;
   id: string;
   name: string;
   category: string;
@@ -47,6 +48,9 @@ export interface Trip {
   status: string;
 }
 export interface Item {
+  categoryId?: string;
+  sourceId?: string;
+  stateToken?: string;
   id: string;
   tripId: string;
   gearId?: string;
@@ -65,6 +69,7 @@ export interface Item {
   replace?: boolean;
 }
 export interface Template {
+  notes?: string;
   id: string;
   name: string;
   items: Omit<Item, "id" | "tripId">[];
@@ -117,6 +122,7 @@ export interface Procurement {
   ready: number;
 }
 export interface Expense {
+  categoryId?: string;
   id: string;
   tripId: string;
   amount: number;
@@ -127,6 +133,7 @@ export interface Expense {
   gearId?: string;
 }
 export interface Wish {
+  categoryId?: string;
   id: string;
   name: string;
   category: string;
@@ -154,6 +161,22 @@ export interface Attachment {
   id: string;
   data: string;
   name: string;
+}
+export type CategorySystem = "gear" | "expense";
+export interface Category {
+  id: string;
+  system: CategorySystem;
+  name: string;
+  icon: string;
+  order: number;
+  disabled: boolean;
+}
+export interface DataMeta {
+  id: "data";
+  changes: number;
+  lastExport: string | null;
+  threshold: number;
+  snoozeUntil: number;
 }
 export const uid = () => crypto.randomUUID();
 export const today = () => {

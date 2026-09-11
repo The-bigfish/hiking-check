@@ -1,4 +1,4 @@
-"""Replace only The-bigfish/hiking-check main, retaining history and a backup branch.
+"""Upgrade only The-bigfish/hiking-check main, retaining history and a backup branch.
 
 Run --plan first. Publishing requires a working `gh auth login` and the --publish flag.
 No credentials are read or printed by this script; GitHub CLI owns authentication.
@@ -43,12 +43,17 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--publish", action="store_true")
     parser.add_argument("--plan", action="store_true")
+    parser.add_argument("--base-commit", help="Reviewed full SHA; defaults to last successful publication")
     args = parser.parse_args()
     files = inventory()
     target = ROOT / ".tmp/deployment-plan.json"
     target.parent.mkdir(exist_ok=True)
-    old_ref = json.loads((ROOT / ".tmp/old-main-ref.json").read_text(encoding="utf-8"))
-    expected = old_ref["object"]["sha"]
+    receipt_path = ROOT / ".tmp/deployment-receipt.json"
+    expected = args.base_commit
+    if not expected and receipt_path.exists():
+        expected = json.loads(receipt_path.read_text(encoding="utf-8"))["commit"]
+    if not expected or len(expected) != 40 or any(c not in "0123456789abcdef" for c in expected):
+        raise RuntimeError("Supply the reviewed full --base-commit SHA before preparing a release")
     plan = {"repo": REPO, "branch": "main", "baseCommit": expected,
             "domain": EXPECTED_HOST, "files": [p.relative_to(ROOT).as_posix() for p in files]}
     target.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -77,10 +82,11 @@ def main():
         except UnicodeDecodeError:
             entry["sha"] = api(f"repos/{REPO}/git/blobs", {"content": base64.b64encode(data).decode(), "encoding": "base64"}, "POST")["sha"]
         entries.append(entry)
-    # No base_tree: all legacy tracked files are replaced, not overlaid.
-    tree = api(f"repos/{REPO}/git/trees", {"tree": entries}, "POST")["sha"]
+    # Incremental upgrade: retain remote files outside the reviewed source inventory.
+    base_tree = api(f"repos/{REPO}/git/commits/{base}")["tree"]["sha"]
+    tree = api(f"repos/{REPO}/git/trees", {"base_tree": base_tree, "tree": entries}, "POST")["sha"]
     commit = api(f"repos/{REPO}/git/commits", {
-        "message": "Replace legacy hiking checklist with offline-first Shanxing PWA",
+        "message": "Release Shanxing 1.1: editable templates, safe packing and offline data upgrades",
         "tree": tree, "parents": [base]}, "POST")["sha"]
     # A regular fast-forward update, never a force-push.
     api(f"repos/{REPO}/git/refs/heads/main", {"sha": commit, "force": False}, "PATCH")

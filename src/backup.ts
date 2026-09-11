@@ -1,5 +1,8 @@
 import { z } from "zod";
+import Dexie from "dexie";
 import { db } from "./db";
+import { migrateData } from "./migration";
+import { business, defaultMeta } from "./changes";
 const s = z.string(),
   n = z.number().finite().nonnegative(),
   i = n.int(),
@@ -17,6 +20,9 @@ const item = z.object({
   id,
   tripId: id,
   gearId: photo,
+  categoryId: photo,
+  sourceId: photo,
+  stateToken: photo,
   name: s,
   category: s,
   quantity: n,
@@ -36,6 +42,7 @@ const schemas = {
     id,
     name: s,
     category: s,
+    categoryId: photo,
     brand: s,
     model: s,
     weight: i,
@@ -69,6 +76,7 @@ const schemas = {
     .refine((t) => t.end >= t.start, "行程日期不合法"),
   items: item,
   templates: z.object({
+    notes: photo,
     id,
     name: s,
     items: z.array(item.omit({ id: true, tripId: true })),
@@ -111,6 +119,7 @@ const schemas = {
   }),
   procurement: z.object({ id, tripId: id, foodId: id, ready: n }),
   expenses: z.object({
+    categoryId: photo,
     id,
     tripId: id,
     amount: i,
@@ -121,6 +130,7 @@ const schemas = {
     gearId: photo,
   }),
   wishes: z.object({
+    categoryId: photo,
     id,
     name: s,
     category: s,
@@ -144,15 +154,24 @@ const schemas = {
     data: s.regex(/^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/),
     name: s,
   }),
+  categories: z.object({
+    id,
+    system: z.enum(["gear", "expense"]),
+    name: s.trim().min(1),
+    icon: s,
+    order: i,
+    disabled: z.boolean(),
+  }),
 };
 export async function exportBackup() {
   const data: Record<string, unknown[]> = {};
   await db.transaction("r", db.tables, async () => {
-    for (const table of db.tables) data[table.name] = await table.toArray();
+    for (const table of db.tables.filter((t) => t.name !== "meta"))
+      data[table.name] = await table.toArray();
   });
   return {
     format: "shanxing-backup",
-    version: 1,
+    version: 2,
     createdAt: new Date().toISOString(),
     data,
   };
@@ -161,19 +180,42 @@ export function validateBackup(input: unknown) {
   const root = z
     .object({
       format: z.literal("shanxing-backup"),
-      version: z.literal(1),
+      version: z.union([z.literal(1), z.literal(2)]),
       createdAt: s,
       data: z.record(z.array(z.unknown())),
     })
     .parse(input);
   const parsed: Record<string, any[]> = {};
   for (const [name, schema] of Object.entries(schemas)) {
-    parsed[name] = z.array(schema).parse(root.data[name]);
+    parsed[name] = z
+      .array(schema)
+      .parse(
+        root.data[name] ??
+          (name === "categories" && root.version === 1 ? [] : undefined),
+      );
     const ids = parsed[name].map((x) => x.id);
     if (new Set(ids).size !== ids.length) throw Error(`${name} 存在重复 ID`);
   }
   const has = (table: string, key: string) =>
     parsed[table].some((r) => r.id === key);
+  if (root.version === 2) {
+    const keys = parsed.categories.map((c) => `${c.system}:${c.name}`);
+    if (new Set(keys).size !== keys.length) throw Error("分类存在重复名称");
+    for (const table of ["gear", "items", "wishes", "expenses"])
+      for (const row of parsed[table])
+        if (
+          row.categoryId &&
+          !parsed.categories.some(
+            (c) =>
+              c.id === row.categoryId &&
+              c.system === (table === "expenses" ? "expense" : "gear"),
+          )
+        )
+          throw Error("分类关联缺失");
+    for (const t of parsed.templates)
+      for (const item of t.items)
+        if (!item.gearId && !item.sourceId) throw Error("模板临时条目来源缺失");
+  }
   for (const [table, rows] of Object.entries(parsed))
     for (const row of rows) {
       if (row.tripId && !has("trips", row.tripId))
@@ -199,12 +241,42 @@ export function validateBackup(input: unknown) {
 }
 export async function restoreBackup(input: unknown) {
   const data = validateBackup(input);
-  await db.transaction("rw", db.tables, async () => {
-    for (const table of db.tables) {
+  await business(async () => {
+    for (const table of db.tables.filter((t) => t.name !== "meta")) {
       await table.clear();
       await table.bulkAdd(data[table.name]);
     }
+    await migrateData(
+      Dexie.currentTransaction!,
+      (input as { version: number }).version === 1,
+    );
   });
+}
+let exporting = false;
+export async function exportAndRecord(send = download) {
+  if (exporting) throw Error("正在导出，请稍候");
+  exporting = true;
+  try {
+    const snapshot = await db.transaction("r", db.tables, async () => ({
+      backup: await exportBackup(),
+      meta: (await db.meta.get("data")) || defaultMeta,
+    }));
+    send(
+      `山行清单备份-${new Date().toISOString().slice(0, 10)}.json`,
+      JSON.stringify(snapshot.backup),
+    );
+    await db.transaction("rw", db.meta, async () => {
+      const current = (await db.meta.get("data")) || defaultMeta;
+      await db.meta.put({
+        ...current,
+        lastExport: new Date().toISOString(),
+        changes: Math.max(0, current.changes - snapshot.meta.changes),
+        snoozeUntil: 0,
+      });
+    });
+  } finally {
+    exporting = false;
+  }
 }
 export function download(
   name: string,

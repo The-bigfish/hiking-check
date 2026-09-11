@@ -19,6 +19,8 @@ import { Trips } from "./Trips";
 import { Settings } from "./Settings";
 import { useOffline } from "./Offline";
 import { seedDemo } from "./demo";
+import { business } from "./changes";
+import { BackupReminder } from "./VersionData";
 export class ErrorBoundary extends Component<
   { children: ReactNode },
   { error: string }
@@ -68,7 +70,7 @@ export default function App() {
     setError("");
     setSave("正在保存 / 处理…");
     try {
-      await fn();
+      await business(fn);
       setSave(
         `本机操作成功 · ${new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}`,
       );
@@ -160,6 +162,15 @@ export default function App() {
           </div>
         </header>
         <main>
+          <BackupReminder />
+          {offline.update && (
+            <div className="notice">
+              <span>发现新版本，已保存的数据会保留。</span>
+              <button onClick={offline.applyUpdate}>
+                发现新版本，更新并重启
+              </button>
+            </div>
+          )}
           {error && (
             <div role="alert" className="error global-error">
               <AlertCircle size={18} />

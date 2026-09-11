@@ -1,5 +1,10 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, useId, type ReactNode } from "react";
 import { X, Plus, Mountain, ArrowUpRight } from "lucide-react";
+import Dexie from "dexie";
+import { CategorySelect } from "./Categories";
+import { db } from "./db";
+import { business } from "./changes";
+import type { CategorySystem } from "./model";
 export type Field = {
   key: string;
   label: string;
@@ -10,6 +15,7 @@ export type Field = {
   step?: number;
   hint?: string;
   value?: unknown;
+  categorySystem?: CategorySystem;
 };
 export function Editor({
   title,
@@ -27,6 +33,8 @@ export function Editor({
   const [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
   const modalRef = useRef<HTMLElement>(null);
+  const formId = useId();
+  const [dirty, setDirty] = useState(false);
   useEffect(() => {
     const previousFocus = document.activeElement as HTMLElement | null;
     const overflow = document.body.style.overflow;
@@ -47,6 +55,7 @@ export function Editor({
         aria-modal="true"
         aria-label={title}
         ref={modalRef}
+        data-editor-dirty={dirty ? "true" : undefined}
         onKeyDown={(e) => {
           if (e.key !== "Tab") return;
           const controls = [
@@ -77,6 +86,7 @@ export function Editor({
           </button>
         </div>
         <form
+          onChange={() => setDirty(true)}
           onSubmit={async (e) => {
             e.preventDefault();
             if (busy) return;
@@ -88,6 +98,20 @@ export function Editor({
             try {
               for (const f of fields) {
                 const raw = form.get(f.key);
+                if (f.categorySystem) {
+                  const c = await db.categories.get(String(raw));
+                  if (!c || c.system !== f.categorySystem)
+                    throw Error("请选择有效分类");
+                  if (
+                    c.disabled &&
+                    c.id !== initial?.categoryId &&
+                    c.name !== initial?.category
+                  )
+                    throw Error("此分类已停用，请选择其他分类");
+                  values.categoryId = c.id;
+                  values[f.key] = c.name;
+                  continue;
+                }
                 values[f.key] =
                   f.type === "checkbox"
                     ? raw === "on"
@@ -112,7 +136,7 @@ export function Editor({
                 )
                   throw Error(`请填写${f.label}`);
               }
-              await onSave(values);
+              await business(() => onSave(values));
               window.dispatchEvent(new Event("shanxing:saved"));
               onClose();
             } catch (err) {
@@ -129,16 +153,29 @@ export function Editor({
         >
           <div className="form-grid">
             {fields.map((f) => (
-              <label
-                className={f.type === "textarea" ? "span-2" : ""}
+              <div
+                className={
+                  f.type === "textarea" ? "form-field span-2" : "form-field"
+                }
                 key={f.key}
               >
-                <span>
+                <label htmlFor={`${formId}-${f.key}`}>
                   {f.label}
                   {f.required && " *"}
-                </span>
-                {f.options ? (
+                </label>
+                {f.categorySystem ? (
+                  <CategorySelect
+                    inputId={`${formId}-${f.key}`}
+                    allowInactive={!!initial}
+                    system={f.categorySystem}
+                    name={f.key}
+                    initialId={initial?.categoryId}
+                    initialName={initial?.[f.key] ?? String(f.value || "其他")}
+                    label={f.label}
+                  />
+                ) : f.options ? (
                   <select
+                    id={`${formId}-${f.key}`}
                     aria-label={f.label}
                     name={f.key}
                     defaultValue={initial?.[f.key] ?? f.value ?? f.options[0]}
@@ -151,12 +188,14 @@ export function Editor({
                   </select>
                 ) : f.type === "textarea" ? (
                   <textarea
+                    id={`${formId}-${f.key}`}
                     name={f.key}
                     defaultValue={initial?.[f.key] ?? f.value ?? ""}
                     rows={3}
                   />
                 ) : (
                   <input
+                    id={`${formId}-${f.key}`}
                     name={f.key}
                     type={f.type || "text"}
                     defaultValue={
@@ -181,7 +220,7 @@ export function Editor({
                   />
                 )}{" "}
                 {f.hint && <small>{f.hint}</small>}
-              </label>
+              </div>
             ))}
           </div>
           {error && (
@@ -299,12 +338,14 @@ export async function photo(file: File | undefined) {
     !["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.type)
   )
     throw Error("请选择 JPG、PNG、WebP 或 GIF 图片");
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(Error("照片读取失败"));
-    reader.readAsDataURL(file);
-  });
+  return Dexie.waitFor(
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(Error("照片读取失败"));
+      reader.readAsDataURL(file);
+    }),
+  );
 }
 export const num = (
   key: string,

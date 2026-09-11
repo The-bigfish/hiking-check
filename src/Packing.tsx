@@ -1,22 +1,22 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { Check, Plus } from "lucide-react";
+import { Check } from "lucide-react";
 import { db } from "./db";
 import { uid, weights, kg, type Trip, type Item } from "./model";
-import { snapshot } from "./services";
-import { Add, Stat, Editor, Empty, txt, num, select, type Field } from "./ui";
-const fields: Field[] = [
-  txt("name", "物品名称", true),
-  txt("category", "分类", true),
-  num("quantity", "本人实际携带数量", 1, 0.1),
-  num("weight", "单件重量（克）"),
-  num("price", "单价（元）", 0, 0.01),
-  { key: "required", label: "必带物品", type: "checkbox", value: true },
-  select("carry", "携带方式", ["背包内", "穿戴", "公共装备"]),
-  select("kind", "重量类别", ["非消耗品", "消耗品", "饮水"]),
-  select("state", "检查状态", ["待准备", "已准备", "已装包"]),
-  { key: "notes", label: "备注", type: "textarea" },
-];
+import { Add, Stat, Editor, Empty, select } from "./ui";
+import { GearPicker } from "./GearPicker";
+import { GearImage } from "./GearImage";
+import { TemplateApply, itemFields } from "./Templates";
+import { SyncGear } from "./SyncGear";
+import {
+  addGearBatch,
+  templateFromTrip,
+  packItems,
+  undoPack,
+  cycleItem,
+  gearDifferences,
+  type PackOperation,
+} from "./packingService";
 export function Packing({
   trip,
   run,
@@ -34,19 +34,41 @@ export function Packing({
         () => db.meals.where("tripId").equals(trip.id).toArray(),
         [trip.id],
       ) || [],
-    gear =
-      useLiveQuery(() =>
-        db.gear.filter((g) => !g.archived && g.status === "正常").toArray(),
-      ) || [],
-    templates = useLiveQuery(() => db.templates.toArray()) || [];
+    gear = useLiveQuery(() => db.gear.toArray()) || [];
   const [edit, setEdit] = useState<Item | null | undefined>(),
     [picker, setPicker] = useState(false),
     [template, setTemplate] = useState(false),
+    [sync, setSync] = useState(false),
     [filter, setFilter] = useState("全部"),
-    [category, setCategory] = useState("全部");
+    [category, setCategory] = useState("全部"),
+    [operations, setOperations] = useState<
+      (PackOperation & { expires: number })[]
+    >([]);
+  useEffect(() => {
+    if (!operations.length) return;
+    const timer = setTimeout(
+      () => setOperations((ops) => ops.filter((o) => o.expires > Date.now())),
+      Math.max(0, Math.min(...operations.map((o) => o.expires)) - Date.now()),
+    );
+    return () => clearTimeout(timer);
+  }, [operations]);
   const w = weights(items, meals),
     packed = items.filter((i) => i.state === "已装包").length,
     locked = trip.status === "已完成";
+  const visible = items.filter(
+    (i) =>
+      (category === "全部" || i.category === category) &&
+      (filter === "全部" ||
+        (i.state !== "已装包" && (filter !== "必带遗漏" || i.required))),
+  );
+  const packable = visible.filter((i) => i.state !== "已装包");
+  const differences = gearDifferences(items, gear);
+  const pack = (ids: string[]) =>
+    run(async () => {
+      const op = await packItems(trip.id, ids);
+      if (op.entries.length)
+        setOperations((ops) => [...ops, { ...op, expires: Date.now() + 6000 }]);
+    });
   return (
     <>
       <div className="stats weight-stats">
@@ -80,6 +102,18 @@ export function Packing({
             }}
           />
         </div>
+        {trip.status === "计划中" &&
+          (differences.diffs.length > 0 ||
+            differences.unavailable.length > 0) && (
+            <div className="notice">
+              <span>
+                {differences.diffs.length
+                  ? "有装备信息更新，查看并同步。"
+                  : "关联装备已归档或不存在，当前快照保留。"}
+              </span>
+              <button onClick={() => setSync(true)}>查看并同步</button>
+            </div>
+          )}
         <div className="toolbar">
           <select
             aria-label="检查筛选"
@@ -115,129 +149,121 @@ export function Packing({
             onClick={() => {
               const name = prompt("保存为模板名称");
               if (name?.trim())
-                void run(() =>
-                  db.templates.add({
-                    id: uid(),
-                    name: name.trim(),
-                    items: items.map(({ id, tripId, ...i }) => ({
-                      ...i,
-                      state: "待准备",
-                      used: undefined,
-                      rating: undefined,
-                      replace: false,
-                    })),
-                  }),
-                );
+                void run(() => templateFromTrip(trip.id, name.trim()));
             }}
           >
             保存为模板
           </button>
           {!locked && (
-            <button
-              className="text-btn danger"
-              onClick={() => {
-                if (confirm("将所有条目重置为待准备？"))
-                  void run(() =>
-                    db.items
-                      .where("tripId")
-                      .equals(trip.id)
-                      .modify({ state: "待准备" }),
-                  );
-              }}
-            >
-              重置检查
-            </button>
+            <>
+              <button
+                className="secondary"
+                disabled={!packable.length}
+                onClick={() => {
+                  if (
+                    confirm(
+                      `将当前筛选结果中 ${packable.length} 项全部装包？不会修改筛选外条目，可在 6 秒内撤销。`,
+                    )
+                  )
+                    void pack(packable.map((i) => i.id));
+                }}
+              >
+                全部装包（当前筛选 {packable.length} 项）
+              </button>
+              <button
+                className="text-btn danger"
+                onClick={() => {
+                  if (
+                    confirm(
+                      "将整个行程的所有条目重置为待准备？包括筛选外条目。",
+                    )
+                  )
+                    void run(() =>
+                      db.items
+                        .where("tripId")
+                        .equals(trip.id)
+                        .filter((i) => i.state !== "待准备")
+                        .modify({ state: "待准备", stateToken: uid() }),
+                    );
+                }}
+              >
+                重置检查
+              </button>
+            </>
           )}
         </div>
         <p className="hint">
-          公共装备填写本人实际携带的数量。餐食请在「餐食」页录入，自动计重；此处的消耗品用于燃料等其他物品。
+          公共装备填写本人实际携带数量。食物在「餐食」录入自动计重；此处消耗品用于燃料等其他物品。
         </p>
         {locked && (
           <p className="notice">已完成行程的打包快照已锁定，复盘仍可编辑。</p>
         )}
-        {items
-          .filter(
-            (i) =>
-              (category === "全部" || i.category === category) &&
-              (filter === "全部" ||
-                (i.state !== "已装包" &&
-                  (filter !== "必带遗漏" || i.required))),
-          )
-          .map((i) => (
-            <div className="pack-row" key={i.id}>
-              <button
-                disabled={locked}
-                className={`pack-check ${i.state === "已装包" ? "checked" : ""}`}
-                aria-label={`${i.name}：${i.state}，点击切换`}
-                onClick={() =>
-                  run(() =>
-                    db.items.update(i.id, {
-                      state:
-                        i.state === "待准备"
-                          ? "已准备"
-                          : i.state === "已准备"
-                            ? "已装包"
-                            : "待准备",
-                    }),
-                  )
-                }
-              >
-                {i.state === "已装包" ? (
-                  <Check />
-                ) : i.state === "已准备" ? (
-                  "·"
-                ) : (
-                  ""
-                )}
-              </button>
-              <div className="grow">
-                <h3>
-                  {i.name}{" "}
-                  {i.required && <span className="required">必带</span>}
-                </h3>
-                <p className="muted">
-                  {i.category} · {i.carry} · {i.state}
-                  {i.notes && ` · ${i.notes}`}
-                </p>
-              </div>
-              <div className="align-right">
-                <strong>{kg(i.weight * i.quantity)}</strong>
-                <small>
-                  {i.weight} g × {i.quantity}
-                </small>
-              </div>
-              {!locked && (
-                <>
-                  <button className="text-btn" onClick={() => setEdit(i)}>
-                    编辑
-                  </button>
-                  <button
-                    className="text-btn danger"
-                    onClick={() => {
-                      if (confirm("移除此清单条目？"))
-                        void run(async () => {
-                          await db.transaction(
-                            "rw",
-                            [db.items, db.wishes],
-                            async () => {
-                              await db.wishes
-                                .filter((w) => w.tripItemId === i.id)
-                                .modify({
-                                  tripItemId: undefined,
-                                  previousItem: undefined,
-                                });
-                              await db.items.delete(i.id);
-                            },
-                          );
-                        });
-                    }}
-                  >
-                    移除
-                  </button>
-                </>
+        {visible.map((i) => (
+          <div className="pack-row" key={i.id}>
+            <button
+              disabled={locked}
+              className={`pack-check ${i.state === "已装包" ? "checked" : ""}`}
+              aria-label={`${i.name}：${i.state}，点击切换`}
+              onClick={() => run(() => cycleItem(trip.id, i.id))}
+            >
+              {i.state === "已装包" ? (
+                <Check />
+              ) : i.state === "已准备" ? (
+                "·"
+              ) : (
+                ""
               )}
+            </button>
+            <GearImage {...i} />
+            <div className="grow">
+              <h3>
+                {i.name} {i.required && <span className="required">必带</span>}
+              </h3>
+              <p className="muted">
+                {i.category} · {i.carry} · {i.state}
+                {i.notes && ` · ${i.notes}`}
+              </p>
             </div>
-          ))}
+            <div className="align-right">
+              <strong>{kg(i.weight * i.quantity)}</strong>
+              <small>
+                {i.weight} g × {i.quantity}
+              </small>
+            </div>
+            {!locked && (
+              <>
+                <button
+                  disabled={i.state === "已装包"}
+                  className="pack-direct"
+                  aria-label={`装包 ${i.name}`}
+                  onClick={() => pack([i.id])}
+                >
+                  {i.state === "已装包" ? "已装包" : "装包"}
+                </button>
+                <button className="text-btn" onClick={() => setEdit(i)}>
+                  编辑
+                </button>
+                <button
+                  className="text-btn danger"
+                  onClick={() => {
+                    if (confirm("移除此清单条目？"))
+                      void run(async () => {
+                        await db.wishes
+                          .filter((w) => w.tripItemId === i.id)
+                          .modify({
+                            tripItemId: undefined,
+                            previousItem: undefined,
+                          });
+                        await db.items.delete(i.id);
+                      });
+                  }}
+                >
+                  移除
+                </button>
+              </>
+            )}
+          </div>
+        ))}
         {!items.length && (
           <Empty
             title="把安心装进背包"
@@ -248,14 +274,23 @@ export function Packing({
       {edit !== undefined && (
         <Editor
           title={edit ? "编辑清单条目" : "添加临时物品"}
-          fields={fields}
+          fields={[
+            ...itemFields,
+            select("state", "检查状态", ["待准备", "已准备", "已装包"]),
+          ]}
           initial={edit ? { ...edit, price: edit.price / 100 } : undefined}
           onClose={() => setEdit(undefined)}
           onSave={async (v) => {
+            const latest = await db.trips.get(trip.id);
+            if (latest?.status === "已完成")
+              throw Error("行程已完成，不能修改");
+            if (v.quantity <= 0) throw Error("数量须大于 0");
             await db.items.put({
               ...edit,
               ...v,
               id: edit?.id || uid(),
+              sourceId: edit?.sourceId || uid(),
+              stateToken: edit?.state === v.state ? edit?.stateToken : uid(),
               tripId: trip.id,
               price: Math.round(v.price * 100),
             });
@@ -263,54 +298,39 @@ export function Packing({
         />
       )}
       {picker && (
-        <Editor
-          title="从装备库添加"
-          fields={[
-            select(
-              "gear",
-              "选择装备",
-              gear.map((g) => `${g.name} · ${g.id}`),
-            ),
-            num("quantity", "本人携带数量", 1, 0.1),
-          ]}
+        <GearPicker
+          existingIds={items.flatMap((i) => (i.gearId ? [i.gearId] : []))}
           onClose={() => setPicker(false)}
-          onSave={async (v) => {
-            const g = gear.find((g) => g.id === v.gear.split(" · ").at(-1));
-            if (!g) throw Error("请先在装备库添加正常状态装备");
-            await db.items.add({
-              ...snapshot(g, trip.id),
-              quantity: v.quantity,
-            });
-          }}
+          onAdd={(ids) => addGearBatch(trip.id, ids)}
         />
-      )}
+      )}{" "}
       {template && (
-        <Editor
-          title="使用装备模板"
-          fields={[
-            select(
-              "template",
-              "选择模板",
-              templates.map((t) => `${t.name} · ${t.id}`),
-            ),
-          ]}
-          onClose={() => setTemplate(false)}
-          onSave={async (v) => {
-            const t = templates.find(
-              (t) => t.id === v.template.split(" · ").at(-1),
-            );
-            if (!t) throw Error("请先将行程清单保存为模板");
-            await db.items.bulkAdd(
-              t.items.map((i) => ({
-                ...i,
-                id: uid(),
-                tripId: trip.id,
-                state: "待准备",
-              })),
-            );
-          }}
-        />
-      )}
+        <TemplateApply tripId={trip.id} onClose={() => setTemplate(false)} />
+      )}{" "}
+      {sync && <SyncGear tripId={trip.id} onClose={() => setSync(false)} />}
+      <div className="undo-stack" aria-live="polite">
+        {operations.map((op) => (
+          <div className="undo-toast" key={op.id}>
+            <span>
+              已装包 ·{" "}
+              {op.entries.length === 1
+                ? items.find((i) => i.id === op.entries[0].id)?.name || "1 项"
+                : `${op.entries.length} 项`}
+            </span>
+            <button
+              aria-label={`撤销装包 ${op.entries.map((e) => items.find((i) => i.id === e.id)?.name).join("、")}`}
+              onClick={() =>
+                run(async () => {
+                  await undoPack(op);
+                  setOperations((ops) => ops.filter((o) => o.id !== op.id));
+                })
+              }
+            >
+              撤销
+            </button>
+          </div>
+        ))}
+      </div>
     </>
   );
 }

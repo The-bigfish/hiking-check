@@ -1,4 +1,6 @@
 import Dexie, { type Table } from "dexie";
+import { migrateData } from "./migration";
+import type { Category, DataMeta } from "./model";
 import type {
   Gear,
   Trip,
@@ -15,6 +17,8 @@ import type {
   Attachment,
 } from "./model";
 export class HikingDB extends Dexie {
+  categories!: Table<Category>;
+  meta!: Table<DataMeta>;
   gear!: Table<Gear>;
   trips!: Table<Trip>;
   items!: Table<Item>;
@@ -55,6 +59,22 @@ export class HikingDB extends Dexie {
             g.maintenance ??= "";
           }),
       );
+    this.version(3)
+      .stores({
+        categories: "id,system,name,order",
+        meta: "id",
+        gear: "id,category,status,maintenance,categoryId",
+        items: "id,tripId,gearId,sourceId,categoryId",
+        wishes: "id,status,categoryId",
+        expenses: "id,tripId,categoryId",
+      })
+      .upgrade(migrateData);
+    this.on("populate", migrateData);
+    this.on("versionchange", () => {
+      this.close();
+      if (typeof window !== "undefined")
+        window.dispatchEvent(new Event("shanxing:database-upgraded"));
+    });
   }
 }
 export const db = new HikingDB();

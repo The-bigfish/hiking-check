@@ -1,0 +1,245 @@
+.equipment-image {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  background: #edf1e5;
+  color: #52724b;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  vertical-align: middle;
+}
+.equipment-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.equipment-image.large {
+  width: 100%;
+  height: 100%;
+  background: none;
+  border-radius: 0;
+}
+.equipment-image > span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.gear-visual > .equipment-image {
+  position: absolute;
+  inset: 0;
+}
+.gear-choice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid #dfe6d7;
+  min-height: 72px;
+  cursor: pointer;
+}
+.gear-choice small {
+  display: block;
+  color: #64775a;
+  font-size: 12px;
+}
+.category-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid #dfe6d7;
+  padding: 12px 0;
+}
+.category-row .grow {
+  min-width: 100px;
+}
+.category-edit {
+  border: 1px solid #c8d7ba;
+  padding: 16px;
+  margin-top: 15px;
+  background: #f1f5e9;
+  border-radius: 8px;
+}
+.category-edit label {
+  display: block;
+  margin-bottom: 12px;
+}
+.category-edit select {
+  width: 100%;
+}
+.modal-backdrop .modal-backdrop {
+  z-index: 110;
+}
+.modal .modal-backdrop .modal-backdrop {
+  z-index: 120;
+}
+.form-grid select {
+  width: 100%;
+}
+.form-grid input[placeholder="搜索分类…"] {
+  margin-bottom: 7px;
+}
+.sync-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 68px;
+  border-bottom: 1px solid #dce5d3;
+  padding: 14px 0;
+  cursor: pointer;
+}
+.sync-values {
+  display: block;
+  color: #567147;
+}
+.undo-stack {
+  position: fixed;
+  bottom: 22px;
+  left: calc(226px + 20px);
+  right: 20px;
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+  max-height: 42dvh;
+  overflow: auto;
+}
+.undo-toast {
+  background: #244b38;
+  color: #fff;
+  padding: 9px 15px;
+  border-radius: 9px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 3px 15px #142a2033;
+  pointer-events: auto;
+}
+.undo-toast button {
+  background: #fff8e3;
+  color: #284c34;
+  min-width: 70px;
+  flex-shrink: 0;
+}
+.pack-direct {
+  min-width: 66px;
+}
+.pack-row .grow {
+  min-width: 120px;
+}
+.version-build {
+  overflow-wrap: anywhere;
+}
+.backup-reminder {
+  position: relative;
+}
+.modal label {
+  color: #314b37;
+}
+.modal > label {
+  display: block;
+  margin-top: 12px;
+}
+.modal > label > input,
+.modal > label > textarea {
+  margin-top: 6px;
+}
+.category-row button {
+  min-width: 44px;
+  min-height: 44px;
+}
+.pack-row .text-btn {
+  min-height: 44px;
+}
+.modal .form-footer {
+  gap: 14px;
+  align-items: center;
+}
+.modal-backdrop:has(.modal-backdrop) > .modal {
+  overflow-y: auto;
+}
+.gear-choice .badge {
+  flex-shrink: 0;
+}
+@media (max-width: 640px) {
+  .undo-stack {
+    bottom: calc(80px + env(safe-area-inset-bottom));
+    left: 12px;
+    right: 12px;
+  }
+  .pack-row {
+    display: grid;
+    grid-template-columns: 44px 44px minmax(0, 1fr) auto;
+    gap: 10px 8px;
+  }
+  .pack-row > .grow {
+    min-width: 0;
+    grid-column: 3/5;
+  }
+  .pack-row > .align-right {
+    grid-column: 1/3;
+    text-align: left;
+    margin: 0;
+  }
+  .pack-direct {
+    grid-column: 3/5;
+    justify-self: stretch;
+    min-height: 46px;
+  }
+  .pack-row > .text-btn {
+    grid-column: span 2;
+  }
+  .equipment-image {
+    width: 44px;
+    height: 44px;
+    flex-basis: 44px;
+  }
+  .category-row .grow {
+    flex-basis: calc(100% - 44px);
+  }
+  .gear-choice {
+    gap: 9px;
+  }
+  .gear-choice input {
+    flex-shrink: 0;
+  }
+  .modal {
+    padding-bottom: 20px;
+  }
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+  .span-2 {
+    grid-column: span 1;
+  }
+  .modal .modal-backdrop {
+    padding: 7px;
+  }
+  .modal .modal-backdrop > .modal {
+    max-height: 90dvh;
+  }
+  .version-build {
+    font-size: 11px;
+  }
+}
+.form-field > label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.form-field > select {
+  width: 100%;
+}
+.form-field > small {
+  display: block;
+  color: #6e7f60;
+}
+.form-field .modal .category-row {
+  font-weight: 400;
+}
