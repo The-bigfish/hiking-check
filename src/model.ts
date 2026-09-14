@@ -67,6 +67,7 @@ export interface Item {
   used?: string;
   rating?: string;
   replace?: boolean;
+  reviewNotes?: string;
 }
 export interface Template {
   notes?: string;

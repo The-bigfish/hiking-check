@@ -219,32 +219,31 @@ export function ReviewPanel({
       ) || [],
     review = useLiveQuery(() => db.reviews.get(trip.id), [trip.id]);
   const [edit, setEdit] = useState(false);
+  const [filter, setFilter] = useState("全部");
+  const visible = items.filter((i) => filter === "全部" || (filter === "未记录" && !i.used) || (filter === "未评价" && !i.rating) || (filter === "需要替换" && i.replace));
   return (
     <div className="two-col">
       <section className="panel">
         <h2>装备使用复盘</h2>
-        <p className="muted">每一次回顾，都是下一次轻装出发的起点。</p>
-        {items.map((i) => (
+        <p className="muted">已记录 {items.filter(i=>i.used).length}/{items.length} · 已评价 {items.filter(i=>i.rating).length}/{items.length} · 待替换 {items.filter(i=>i.replace).length}</p>
+        <label>筛选复盘 <select value={filter} onChange={e=>setFilter(e.currentTarget.value)}><option>全部</option><option>未记录</option><option>未评价</option><option>需要替换</option></select></label>
+        {visible.map((i) => (
           <div className="review-row" key={i.id}>
             <h3>{i.name}</h3>
             <div className="toolbar">
               <select
-                aria-label={`${i.name}是否使用`}
+                aria-label={`${i.name}使用情况`}
                 value={i.used || "未记录"}
-                onChange={(e) =>
-                  run(() => db.items.update(i.id, { used: e.target.value }))
-                }
+                onChange={(e) => { const used = e.currentTarget.value; void run(async () => { if (!(await db.items.update(i.id, { used }))) throw Error("复盘条目不存在，未保存使用情况"); }); }}
               >
                 {["未记录", "使用了", "未使用"].map((s) => (
                   <option key={s}>{s}</option>
                 ))}
               </select>
               <select
-                aria-label={`${i.name}使用体验`}
+                aria-label={`${i.name}使用评价`}
                 value={i.rating || "未评价"}
-                onChange={(e) =>
-                  run(() => db.items.update(i.id, { rating: e.target.value }))
-                }
+                onChange={(e) => { const rating = e.currentTarget.value; void run(async () => { if (!(await db.items.update(i.id, { rating }))) throw Error("复盘条目不存在，未保存使用评价"); }); }}
               >
                 {["未评价", "好用", "一般", "不好用"].map((s) => (
                   <option key={s}>{s}</option>
@@ -254,29 +253,16 @@ export function ReviewPanel({
                 <input
                   type="checkbox"
                   checked={!!i.replace}
-                  onChange={(e) =>
-                    run(() =>
-                      db.items.update(i.id, { replace: e.target.checked }),
-                    )
-                  }
+                  aria-label={`${i.name}下次需要替换`}
+                  onChange={(e) => { const replace = e.currentTarget.checked; void run(async () => { if (!(await db.items.update(i.id, { replace }))) throw Error("复盘条目不存在，未保存替换标记"); }); }}
                 />
                 需要替换
               </label>
               {i.replace && (
                 <button
                   className="text-btn"
-                  onClick={() =>
-                    run(async () => {
-                      if (
-                        await db.wishes
-                          .filter(
-                            (w) =>
-                              w.reason === `复盘替换：${trip.name} / ${i.id}` &&
-                              w.status === "待购买",
-                          )
-                          .count()
-                      )
-                        throw Error("已加入待购清单");
+                  onClick={() => run(async () => {
+                      if (await db.wishes.where("tripItemId").equals(i.id).count()) throw Error("已加入待购清单");
                       await db.wishes.add({
                         id: uid(),
                         name: i.name,
@@ -290,11 +276,11 @@ export function ReviewPanel({
                         priority: "普通",
                         reason: `复盘替换：${trip.name} / ${i.id}`,
                         status: "待购买",
+                        tripItemId: i.id,
                       });
-                    })
-                  }
+                    })}
                 >
-                  加入待购
+                  添加替换装备到待购
                 </button>
               )}
             </div>
@@ -342,3 +328,4 @@ export function ReviewPanel({
     </div>
   );
 }
+
