@@ -2,6 +2,7 @@ import { useState } from "react";
 import Dexie from "dexie";
 import { useLiveQuery } from "dexie-react-hooks";
 import { VersionData } from "./VersionData";
+import { DisplayMode } from "./DisplayMode";
 import { CategoryManager } from "./Categories";
 import { TemplateEditor } from "./Templates";
 import { uid, type Template } from "./model";
@@ -36,6 +37,7 @@ export function Settings({
         description="数据属于你，保存在当前设备。记得为山野记忆留一份备份。"
       />
       <VersionData offline={offline} />
+      <DisplayMode />
       <button className="secondary" onClick={() => setCategoriesOpen(true)}>
         管理分类
       </button>

@@ -197,7 +197,7 @@ test("分类管理返回保留草稿，离线图标回退、版本提示与备�
 }) => {
   await page.goto("/");
   await nav(page, "我的");
-  await expect(page.getByTestId("app-version")).toHaveText("1.1.0");
+  await expect(page.getByTestId("app-version")).toHaveText("1.1.1");
   await page.getByLabel("备份提醒阈值").fill("1");
   await page.getByRole("button", { name: "保存提醒设置" }).click();
   await nav(page, "装备");

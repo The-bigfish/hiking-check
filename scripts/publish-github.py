@@ -86,7 +86,7 @@ def main():
     base_tree = api(f"repos/{REPO}/git/commits/{base}")["tree"]["sha"]
     tree = api(f"repos/{REPO}/git/trees", {"base_tree": base_tree, "tree": entries}, "POST")["sha"]
     commit = api(f"repos/{REPO}/git/commits", {
-        "message": "Release Shanxing 1.1: editable templates, safe packing and offline data upgrades",
+        "message": "Release Shanxing 1.1.1: optional fullscreen and home screen guidance",
         "tree": tree, "parents": [base]}, "POST")["sha"]
     # A regular fast-forward update, never a force-push.
     api(f"repos/{REPO}/git/refs/heads/main", {"sha": commit, "force": False}, "PATCH")
