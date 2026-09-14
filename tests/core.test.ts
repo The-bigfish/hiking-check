@@ -159,7 +159,7 @@ describe("事务与历史", () => {
       ...old,
       maintenance: "",
     });
-    expect(upgraded.verno).toBe(3);
+    expect(upgraded.verno).toBe(4);
     await upgraded.delete();
   });
   it("连续购买及重试只生成一件装备", async () => {
@@ -320,3 +320,4 @@ describe("完整备份", () => {
     expect(await db.gear.count()).toBe(0);
   });
 });
+

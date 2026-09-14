@@ -69,6 +69,9 @@ export class HikingDB extends Dexie {
         expenses: "id,tripId,categoryId",
       })
       .upgrade(migrateData);
+    this.version(4).stores({
+      wishes: "id,status,categoryId,tripItemId",
+    });
     this.on("populate", migrateData);
     this.on("versionchange", () => {
       this.close();

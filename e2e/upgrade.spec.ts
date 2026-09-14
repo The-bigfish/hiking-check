@@ -122,7 +122,7 @@ test("真实 1.0 资源升级到 1.1：旧数据照片快照保留，主动更�
       .locator(".bottom-nav")
       .getByRole("button", { name: "我的", exact: true })
       .click();
-    await expect(p.getByTestId("app-version")).toHaveText("1.1.1");
+    await expect(p.getByTestId("app-version")).toHaveText("1.1.2");
     const migrated = await p.evaluate(
       () =>
         new Promise<any>((resolve) => {
@@ -154,7 +154,7 @@ test("真实 1.0 资源升级到 1.1：旧数据照片快照保留，主动更�
           };
         }),
     );
-    expect(migrated.version).toBe(30);
+    expect(migrated.version).toBe(40);
     expect(migrated.gear.length).toBe(old.gear.length);
     expect(migrated.attachments).toEqual(old.attachments);
     for (const i of old.items)

@@ -16,7 +16,7 @@ try {
   await page.goto(url, {waitUntil:'networkidle', timeout:60000});
   await expect(page).toHaveTitle(/山行清单/);
   await page.locator('.bottom-nav').getByRole('button',{name:'我的',exact:true}).click();
-  await expect(page.getByTestId('app-version')).toHaveText('1.1.1');
+  await expect(page.getByTestId('app-version')).toHaveText('1.1.2');
   await expect.poll(async()=>page.evaluate(async()=>!!(await navigator.serviceWorker.getRegistration())?.active),{timeout:30000}).toBe(true);
   await page.getByRole('button',{name:'检查离线使用条件'}).click();
   await expect(page.getByText('已就绪',{exact:true})).toBeVisible();
