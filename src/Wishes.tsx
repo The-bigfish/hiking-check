@@ -2,6 +2,11 @@ import { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { ShoppingBag, ExternalLink } from "lucide-react";
 import { GearImage } from "./GearImage";
+
+// Internal trip item IDs remain stored for reliable deduplication, but are never shown to users.
+function displayReason(reason: string) {
+  return reason.replace(/^(复盘替换：.+?)\s*\/\s*[0-9a-f]{8}-[0-9a-f-]{27,}$/i, "$1");
+}
 import { db } from "./db";
 import { uid, money, today, type Wish } from "./model";
 import { purchase, undoPurchase } from "./services";
@@ -73,7 +78,7 @@ export function Wishes({
                 <p className="muted">
                   {w.category} · {w.brand} {w.model} · {w.weight} g
                 </p>
-                <p>{w.reason}</p>
+                <p>{displayReason(w.reason)}</p>
                 {/^https?:\/\//i.test(w.url) && (
                   <a href={w.url} target="_blank" rel="noopener noreferrer">
                     购买参考 <ExternalLink size={13} />
